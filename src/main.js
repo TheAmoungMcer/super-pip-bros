@@ -2,38 +2,50 @@ import { createScreen } from './engine/render.js';
 import { createInput, edges } from './engine/input.js';
 import { startLoop } from './engine/loop.js';
 import { createAudio } from './engine/audio.js';
+import { BTN } from './game/consts.js';
 import { createLevelSim, stepLevel } from './game/sim.js';
+import { createSession, stepSession, makeSave } from './game/session.js';
+import { safeStorage, listSaves, readSave, writeSave, eraseSave } from './game/save.js';
 import { drawLevel } from './draw/level.js';
 import { drawHud } from './draw/hud.js';
 import { drawGallery } from './draw/gallery.js';
-import { BTN } from './game/consts.js';
+import { drawSession } from './draw/scenes.js';
+import { songFor } from './draw/present.js';
+import { createTitle, stepTitle, drawTitle } from './ui/title.js';
 import { LEVELS as DEV } from './content/levels/dev.js';
+import { LEVELS as W1 } from './content/levels/w1.js';
 
 const { ctx } = createScreen(document.getElementById('screen'));
 const input = createInput();
 const audio = createAudio();
-window.addEventListener('keydown', () => audio.unlock());
+const storage = safeStorage();
+for (const ev of ['keydown', 'pointerdown']) window.addEventListener(ev, () => audio.unlock());
 const params = new URLSearchParams(location.search);
 
-const loadWorld = async () => {
-  try { return (await import('./content/levels/w1.js')).LEVELS; } catch { return {}; }
+const playEvents = (events) => {
+  for (const ev of events) {
+    if (ev.e !== 'sfx') continue;
+    audio.sfx(ev.id);
+    if (ev.id === 'hurry') audio.setTempoScale(1.25);
+  }
 };
 
-if (params.has('map')) {
-  const { MAP_W1 } = await import('./content/maps/w1.js');
-  const { createMap, stepMap } = await import('./game/worldmap.js');
-  const { drawMap } = await import('./draw/map.js');
-  const m = createMap(MAP_W1); let frame = 0;
-  window.__map = m;
-  startLoop({ step() { frame++; stepMap(m, MAP_W1, [input.read()]); }, draw() { drawMap(ctx, MAP_W1, m, [{}], frame); } });
-} else if (params.has('gallery')) {
+// Dev: sprite gallery (?gallery), arrows change page.
+function gallery() {
   let page = 0, prev = 0;
   startLoop({
-    step() { const m = input.read(); const { pressed } = edges(prev, m); prev = m; if (pressed & BTN.RIGHT) page++; if (pressed & BTN.LEFT) page = Math.max(0, page - 1); },
+    step() {
+      const m = input.read(); const { pressed } = edges(prev, m); prev = m;
+      if (pressed & BTN.RIGHT) page++;
+      if (pressed & BTN.LEFT) page = Math.max(0, page - 1);
+    },
     draw() { drawGallery(ctx, page); },
   });
-} else {
-  const defs = { ...DEV, ...(await loadWorld()) };
+}
+
+// Dev: play one level (?level=1-1&form=leaf), restarting on clear or fail.
+function devRunner() {
+  const defs = { ...DEV, ...W1 };
   const id = params.get('level') || 'dev';
   const form = params.get('form') || 'small';
   let s = createLevelSim(defs[id], { defs, forms: [form] });
@@ -42,13 +54,10 @@ if (params.has('map')) {
   startLoop({
     step() {
       stepLevel(s, [input.read()]);
-      for (const ev of s.events) {
-        if (ev.e === 'sfx') audio.sfx(ev.id);
-        if (ev.e === 'clear') audio.playSong('clear');
-      }
-      const want = s.mode !== 'play' ? (s.mode === 'fail' ? '' : 'clear')
+      playEvents(s.events);
+      const want = s.mode === 'fail' ? '' : s.mode !== 'play' ? 'clear'
         : s.players[0].dead ? 'death' : s.players[0].starTimer > 0 ? 'star' : s.pswitch > 0 ? 'pswitch' : s.lv.music;
-      if (want !== song) { song = want; if (want) audio.playSong(want); }
+      if (want !== song) { song = want; if (want) audio.playSong(want); else audio.stopSong(); }
       if (s.mode === 'done' || s.mode === 'fail') { s = createLevelSim(defs[id], { defs, forms: [form] }); song = ''; }
     },
     draw() {
@@ -58,3 +67,36 @@ if (params.has('map')) {
     },
   });
 }
+
+// The game: title -> save slot -> session.
+function game() {
+  let mode = 'title', title = createTitle(listSaves(storage)), sess = null, slot = 0, song = '';
+  window.__game = { get mode() { return mode; }, get sess() { return sess; }, get title() { return title; } };
+  const begin = (players, saveSlot) => {
+    const r = readSave(storage, saveSlot);
+    sess = createSession({ players, seed: (Math.random() * 1e9) | 0, save: r.ok ? r.data : null });
+    slot = saveSlot; mode = 'game';
+  };
+  startLoop({
+    step() {
+      const m = input.read();
+      if (mode === 'title') {
+        const act = stepTitle(title, m);
+        if (act?.action === 'start') begin(1, act.slot);
+        else if (act?.action === 'erase') { eraseSave(storage, act.slot); title.saves = listSaves(storage); }
+      } else {
+        stepSession(sess, [m, 0]);
+        playEvents(sess.events);
+        if (sess.dirty && sess.scene !== 'level') { writeSave(storage, slot, makeSave(sess)); sess.dirty = false; }
+        if (sess.quit) { mode = 'title'; title = createTitle(listSaves(storage)); }
+      }
+      const want = mode === 'title' ? 'title' : songFor(sess);
+      if (want !== song) { song = want; audio.setTempoScale(1); if (want) audio.playSong(want); else audio.stopSong(); }
+    },
+    draw() { if (mode === 'title') drawTitle(ctx, title); else drawSession(ctx, sess, 0); },
+  });
+}
+
+if (params.has('gallery')) gallery();
+else if (params.has('level')) devRunner();
+else game();

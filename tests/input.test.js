@@ -36,3 +36,13 @@ test('held keys are cleared when the window loses focus', () => {
   handlers.blur();
   expect(input.read()).toBe(0);
 });
+
+test('a tap shorter than one frame is still seen once', () => {
+  const handlers = {};
+  const target = { addEventListener: (t, f) => { handlers[t] = f; } };
+  const input = createInput(target, () => []);
+  handlers.keydown({ code: 'KeyZ', preventDefault() {} });
+  handlers.keyup({ code: 'KeyZ' });
+  expect(input.read()).toBe(BTN.A);
+  expect(input.read()).toBe(0);
+});

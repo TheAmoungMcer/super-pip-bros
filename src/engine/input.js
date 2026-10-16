@@ -29,20 +29,21 @@ export function edges(prev, cur) {
 }
 
 export function createInput(target = window, getPads = () => (navigator.getGamepads ? navigator.getGamepads() : [])) {
-  let keys = 0;
+  let keys = 0, tapped = 0;   // tapped: keys pressed since the last read, so sub-frame taps still count
   target.addEventListener('keydown', (e) => {
     const m = keyMask(e.code);
-    if (m) { keys |= m; e.preventDefault(); }
+    if (m) { keys |= m; tapped |= m; e.preventDefault(); }
   });
   target.addEventListener('keyup', (e) => { keys &= ~keyMask(e.code); });
-  const clear = () => { keys = 0; };
+  const clear = () => { keys = 0; tapped = 0; };
   target.addEventListener('blur', clear);
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => { if (document.hidden) clear(); });
   }
   return {
     read() {
-      let m = keys;
+      let m = keys | tapped;
+      tapped = 0;
       for (const gp of getPads()) m |= gamepadMask(gp);
       return m;
     },
