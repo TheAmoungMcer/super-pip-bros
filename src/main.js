@@ -20,6 +20,9 @@ import { fillNES } from './engine/render.js';
 import { drawText } from './draw/text.js';
 import { LEVELS as DEV } from './content/levels/dev.js';
 import { LEVELS as W1 } from './content/levels/w1.js';
+import { runSelfTest } from './selftest.js';
+
+window.__runSelfTest = runSelfTest;
 
 const { ctx } = createScreen(document.getElementById('screen'));
 const input = createInput();
