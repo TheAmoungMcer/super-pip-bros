@@ -108,3 +108,21 @@ test('a guest with the wrong protocol version is rejected', () => {
   expect(got).toEqual({ t: 'reject', reason: 'version' });
   expect(sess.players).toBe(1);
 });
+
+test('a guest that goes silent is dropped after 5 seconds', () => {
+  const r = rig();
+  r.join();
+  for (let i = 0; i < 30; i++) r.frame();
+  expect(r.sess.players).toBe(2);
+  for (let i = 0; i < 320; i++) { r.host.step(0); r.link.tick(); }    // guest tab vanished: no messages, no close event
+  expect(r.host.connected).toBe(false);
+  expect(r.sess.players).toBe(1);
+});
+
+test('a guest whose host goes silent gives up after 5 seconds', () => {
+  const r = rig();
+  const g = r.join();
+  for (let i = 0; i < 30; i++) r.frame();
+  for (let i = 0; i < 320; i++) { g.step(0); r.link.tick(); }        // host vanished
+  expect(g.status).toBe('closed');
+});

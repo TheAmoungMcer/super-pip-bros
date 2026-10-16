@@ -11,7 +11,13 @@ import { drawHud } from './draw/hud.js';
 import { drawGallery } from './draw/gallery.js';
 import { drawSession } from './draw/scenes.js';
 import { songFor } from './draw/present.js';
-import { createTitle, stepTitle, drawTitle } from './ui/title.js';
+import { createTitle, stepTitle, drawTitle, typeCode } from './ui/title.js';
+import { createHost } from './net/host.js';
+import { createGuest } from './net/guest.js';
+import { hostRoom, joinRoom } from './net/peer.js';
+import { WORLDS } from './game/session.js';
+import { fillNES } from './engine/render.js';
+import { drawText } from './draw/text.js';
 import { LEVELS as DEV } from './content/levels/dev.js';
 import { LEVELS as W1 } from './content/levels/w1.js';
 
@@ -68,32 +74,88 @@ function devRunner() {
   });
 }
 
-// The game: title -> save slot -> session.
+// The game: title -> save slot -> session (solo or hosting), or joining someone else's room.
 function game() {
   let mode = 'title', title = createTitle(listSaves(storage)), sess = null, slot = 0, song = '';
-  window.__game = { get mode() { return mode; }, get sess() { return sess; }, get title() { return title; } };
+  let host = null, guest = null, room = null, banner = '', bannerT = 0, roomCode = '', hadGuest = false;
+  window.__game = { get mode() { return mode; }, get sess() { return sess; }, get title() { return title; }, get host() { return host; }, get guest() { return guest; }, get banner() { return banner; } };
+  const NAV = BTN.UP | BTN.DOWN | BTN.LEFT | BTN.RIGHT | BTN.START;
+  window.addEventListener('pagehide', () => { if (guest) guest.leave(); });
+  window.addEventListener('keydown', (e) => {
+    if (mode !== 'title' || title.mode !== 'code') return;
+    if (e.key === 'Escape') title.mode = 'menu';
+    else typeCode(title, e.key);
+  });
   const begin = (players, saveSlot) => {
     const r = readSave(storage, saveSlot);
     sess = createSession({ players, seed: (Math.random() * 1e9) | 0, save: r.ok ? r.data : null });
     slot = saveSlot; mode = 'game';
   };
+  const backToTitle = (msg = '') => {
+    if (room) room.close();
+    room = null; host = null; guest = null; sess = null;
+    mode = 'title'; title = createTitle(listSaves(storage)); title.msg = msg;
+  };
+  const saveIfDirty = () => {
+    if (sess.dirty && sess.scene !== 'level') { writeSave(storage, slot, makeSave(sess)); sess.dirty = false; }
+  };
   startLoop({
+    keepAliveHidden: () => mode === 'host',
     step() {
-      const m = input.read();
+      const coding = mode === 'title' && title.mode === 'code';
+      const m = coding ? (input.readPads() | (input.readKeys() & NAV)) : input.read();
       if (mode === 'title') {
         const act = stepTitle(title, m);
-        if (act?.action === 'start') begin(1, act.slot);
+        if (act?.action === 'start' && act.next === 'host') {
+          begin(1, act.slot);
+          mode = 'host';
+          host = createHost(sess);
+          banner = 'OPENING ROOM...';
+          room = hostRoom({
+            onCode: (c) => { roomCode = c; banner = `ROOM ${c} - SHARE THIS CODE`; },
+            onGuest: (t) => { host.attach(t); hadGuest = true; banner = 'PEP JOINED!'; bannerT = 180; },
+            onError: (msg) => { banner = `${msg} - PLAYING SOLO`; },
+          });
+        } else if (act?.action === 'start') begin(1, act.slot);
         else if (act?.action === 'erase') { eraseSave(storage, act.slot); title.saves = listSaves(storage); }
-      } else {
+        else if (act?.action === 'join') {
+          mode = 'join'; banner = `CONNECTING TO ${act.code}...`;
+          room = joinRoom(act.code, {
+            onConnected: (t) => { guest = createGuest(t, WORLDS); },
+            onError: (msg) => backToTitle(msg),
+          });
+        }
+      } else if (mode === 'game') {
         stepSession(sess, [m, 0]);
         playEvents(sess.events);
-        if (sess.dirty && sess.scene !== 'level') { writeSave(storage, slot, makeSave(sess)); sess.dirty = false; }
-        if (sess.quit) { mode = 'title'; title = createTitle(listSaves(storage)); }
+        saveIfDirty();
+        if (sess.quit) backToTitle();
+      } else if (mode === 'host') {
+        playEvents(host.step(m));
+        if (!host.connected && hadGuest) { hadGuest = false; bannerT = 0; banner = `PEP LEFT - ROOM ${roomCode} STILL OPEN`; }
+        if (bannerT > 0 && --bannerT === 0 && host.connected) banner = '';
+        saveIfDirty();
+        if (sess.quit) backToTitle();
+      } else if (mode === 'join' && guest) {
+        playEvents(guest.step(m));
+        if (guest.status === 'closed') backToTitle('HOST LEFT THE GAME');
+        else if (guest.status === 'rejected') backToTitle('VERSION MISMATCH - RELOAD THE PAGE');
       }
-      const want = mode === 'title' ? 'title' : songFor(sess);
+      const view = mode === 'join' ? guest && guest.view() : sess;
+      const want = mode === 'title' ? 'title' : view ? songFor(view) : '';
       if (want !== song) { song = want; audio.setTempoScale(1); if (want) audio.playSong(want); else audio.stopSong(); }
     },
-    draw() { if (mode === 'title') drawTitle(ctx, title); else drawSession(ctx, sess, 0); },
+    draw() {
+      if (mode === 'title') { drawTitle(ctx, title); return; }
+      if (mode === 'join') {
+        const v = guest && guest.view();
+        if (v) drawSession(ctx, v, 1);
+        else { fillNES(ctx, 0x0F, 0, 0, 256, 240); drawText(ctx, banner, 128 - banner.length * 4, 112); }
+        return;
+      }
+      drawSession(ctx, sess, 0);
+      if (mode === 'host' && banner) { fillNES(ctx, 0x0F, 0, 0, 256, 12); drawText(ctx, banner, 128 - banner.length * 4, 2); }
+    },
   });
 }
 

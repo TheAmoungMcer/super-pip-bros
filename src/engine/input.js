@@ -40,13 +40,12 @@ export function createInput(target = window, getPads = () => (navigator.getGamep
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => { if (document.hidden) clear(); });
   }
+  const readPads = () => { let m = 0; for (const gp of getPads()) m |= gamepadMask(gp); return m; };
+  const readKeys = () => { const m = keys | tapped; tapped = 0; return m; };
   return {
-    read() {
-      let m = keys | tapped;
-      tapped = 0;
-      for (const gp of getPads()) m |= gamepadMask(gp);
-      return m;
-    },
+    read() { return readKeys() | readPads(); },
+    readKeys,
+    readPads,
     clear,
   };
 }

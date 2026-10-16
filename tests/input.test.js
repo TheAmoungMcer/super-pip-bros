@@ -46,3 +46,14 @@ test('a tap shorter than one frame is still seen once', () => {
   expect(input.read()).toBe(BTN.A);
   expect(input.read()).toBe(0);
 });
+
+test('keyboard and gamepad masks can be read separately', () => {
+  const handlers = {};
+  const target = { addEventListener: (t, f) => { handlers[t] = f; } };
+  const pad = { buttons: Array.from({ length: 17 }, (_, k) => ({ pressed: k === 0 })), axes: [0, 0] };
+  const input = createInput(target, () => [pad]);
+  handlers.keydown({ code: 'KeyX', preventDefault() {} });
+  expect(input.readKeys()).toBe(BTN.B);
+  expect(input.readPads()).toBe(BTN.A);
+  expect(input.read()).toBe(BTN.A | BTN.B);
+});

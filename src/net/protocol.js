@@ -1,5 +1,7 @@
 export const PROTOCOL_VERSION = 1;
 export const SNAP_EVERY = 3;
+// WebRTC doesn't always report a vanished peer, so 5 s of silence counts as a disconnect.
+export const SILENCE_FRAMES = 300;
 
 export function b64(u8) {
   let s = '';

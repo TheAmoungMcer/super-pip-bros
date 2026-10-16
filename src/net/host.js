@@ -1,14 +1,15 @@
 import { stepSession, addPlayer, dropPlayer } from '../game/session.js';
-import { PROTOCOL_VERSION, SNAP_EVERY, liteSession, levelSnapshot, forGuest } from './protocol.js';
+import { PROTOCOL_VERSION, SNAP_EVERY, SILENCE_FRAMES, liteSession, levelSnapshot, forGuest } from './protocol.js';
 
 export function createHost(sess) {
   const h = {
-    sess, conn: null, connected: false, queue: [], lastB: 0, ack: -1, frame: 0, sent: { area: null, n: 0 }, evBuf: [], localB: 0,
+    sess, conn: null, connected: false, queue: [], lastB: 0, silent: 0, ack: -1, frame: 0, sent: { area: null, n: 0 }, evBuf: [], localB: 0,
     attach(conn) {
       conn.onMessage((m) => {
+        if (h.conn === conn) h.silent = 0;
         if (m.t === 'hello') {
           if (m.v !== PROTOCOL_VERSION) { conn.send({ t: 'reject', reason: 'version' }); return; }
-          h.conn = conn; h.connected = true; h.queue = []; h.lastB = 0; h.ack = -1; h.sent = { area: null, n: 0 };
+          h.conn = conn; h.connected = true; h.silent = 0; h.queue = []; h.lastB = 0; h.ack = -1; h.sent = { area: null, n: 0 };
           addPlayer(h.sess);
           conn.send({ t: 'welcome', idx: 1 });
         } else if (m.t === 'in' && h.conn === conn) {
@@ -17,14 +18,17 @@ export function createHost(sess) {
           conn.close();
         }
       });
-      conn.onClose(() => {
-        if (h.conn !== conn) return;
-        h.conn = null; h.connected = false;
-        dropPlayer(h.sess);
-      });
+      conn.onClose(() => { if (h.conn === conn) h.drop(); });
+    },
+    drop() {
+      const c = h.conn;
+      h.conn = null; h.connected = false;
+      dropPlayer(h.sess);
+      if (c) c.close();
     },
     step(localB) {
       h.localB = localB;
+      if (h.connected && ++h.silent > SILENCE_FRAMES) h.drop();
       let gb = h.lastB;
       if (h.queue.length > 6) {
         // Collapse a backlog but keep every press that happened in it.

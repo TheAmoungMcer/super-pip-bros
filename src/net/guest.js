@@ -1,13 +1,14 @@
 import { stepLevel } from '../game/sim.js';
 import { parseLevel } from '../game/level.js';
-import { PROTOCOL_VERSION, unb64 } from './protocol.js';
+import { PROTOCOL_VERSION, SILENCE_FRAMES, unb64 } from './protocol.js';
 
 export function createGuest(conn, worlds) {
   const g = {
     status: 'connecting', reason: '', sess: null, level: null, baseLv: null,
-    pending: [], f: 0, hostB: 0, inbound: [],
+    pending: [], f: 0, hostB: 0, inbound: [], silent: 0,
     step(localB) {
       if (g.status !== 'playing' && g.status !== 'connecting') return [];
+      if (++g.silent > SILENCE_FRAMES) { g.status = 'closed'; conn.close(); return []; }
       conn.send({ t: 'in', f: g.f, b: localB });
       g.pending.push({ f: g.f, b: localB });
       g.f++;
@@ -19,6 +20,7 @@ export function createGuest(conn, worlds) {
       return events;
     },
     view() { return g.sess ? { ...g.sess, level: g.level } : null; },
+    leave() { conn.send({ t: 'bye' }); conn.close(); },
   };
 
   const defsFor = (area) => worlds[g.sess.world].levels;
@@ -47,6 +49,7 @@ export function createGuest(conn, worlds) {
   }
 
   conn.onMessage((m) => {
+    g.silent = 0;
     if (m.t === 'welcome') g.status = 'playing';
     else if (m.t === 'reject') { g.status = 'rejected'; g.reason = m.reason; }
     else if (m.t === 'snap') applySnapshot(m);
