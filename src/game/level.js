@@ -22,7 +22,7 @@ export function parseLevel(def) {
   return {
     id: def.id, theme: def.theme || 'overworld', music: def.music || def.theme || 'overworld',
     time: def.time ?? 300, w, h, tiles, spawns, start: { tx: stx, ty: sty },
-    pipes: def.pipes || [], tileLog: [],
+    pipes: def.pipes || [], doors: def.doors || [], tileLog: [],
   };
 }
 

@@ -3,7 +3,7 @@ const NAMES = [
   'Q_1UP', 'Q_STAR', 'HIDDEN_1UP', 'COIN', 'NOTE', 'USED', 'WOOD', 'SEMI', 'CLOUD',
   'PIPE_TL', 'PIPE_TR', 'PIPE_L', 'PIPE_R', 'SLOPE45_UP', 'SLOPE45_DN',
   'GENTLE_UP_LO', 'GENTLE_UP_HI', 'GENTLE_DN_HI', 'GENTLE_DN_LO', 'LAVA', 'CANNON',
-  'GOAL', 'DOOR', 'HARD', 'PSWITCH_COIN',
+  'GOAL', 'DOOR', 'HARD', 'PSWITCH_COIN', 'PSWITCH_BRICK',
 ];
 export const T = Object.fromEntries(NAMES.map((n, i) => [n, i]));
 
@@ -43,6 +43,7 @@ Object.assign(INFO, {
   [T.GENTLE_UP_LO]: { ...base, slope: true }, [T.GENTLE_UP_HI]: { ...base, slope: true },
   [T.GENTLE_DN_HI]: { ...base, slope: true }, [T.GENTLE_DN_LO]: { ...base, slope: true },
   [T.LAVA]: { ...base, deadly: true },
+  [T.PSWITCH_BRICK]: solid({ breakable: true }),
 });
 
 // Pixels from the tile's top edge down to the walkable surface at local x (0..15).

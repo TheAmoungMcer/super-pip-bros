@@ -20,7 +20,7 @@ export function createPlayer(idx, tx, ty, form = 'small') {
     crouch: false, sliding: false, pmeter: 0, pTimer: 0, pRunning: false,
     flyTimer: 0, floatTimer: 0, tailTimer: 0, fireCooldown: 0, hurtTimer: 0, starTimer: 0,
     growTimer: 0, kickTimer: 0, carry: -1, dead: false, deathTimer: 0, respawnTimer: 0,
-    finished: false, anim: 'stand', animT: 0, prev: 0, lastSlope: 0, skid: false, combo: 0,
+    finished: false, anim: 'stand', animT: 0, prev: 0, lastSlope: 0, skid: false, combo: 0, ride: -1, pipe: null,
   };
   setForm(p, form);
   placeAt(p, tx, ty);

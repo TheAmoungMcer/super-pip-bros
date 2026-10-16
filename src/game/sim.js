@@ -1,7 +1,8 @@
 import { TS, SUB, BTN } from './consts.js';
 import { parseLevel, tileAt, setTile } from './level.js';
 import { INFO, T } from './tiles.js';
-import { createPlayer, updatePlayer, isBig, setForm } from './player.js';
+import { createPlayer, updatePlayer, isBig, setForm, placeAt } from './player.js';
+import { enterArea, buildCannons } from './areas.js';
 import { createCamera, updateCamera } from './camera.js';
 import { moveBody } from './physics.js';
 import { killPlayer, formActions } from './powerups.js';
@@ -13,7 +14,7 @@ import { fireCannons } from './entities/hazards.js';
 export const DEATH_FRAMES = 150, RESPAWN_FRAMES = 180, CLEAR_FRAMES = 240, TIME_TICK = 40;
 const SPAWN_MARGIN = 24, DESPAWN_MARGIN = 80;  // pixels beyond the screen edge
 
-export function createLevelSim(def, { players = 1, forms = [], seed = 1, shared = { coins: 0, lives: 5, score: 0 } } = {}) {
+export function createLevelSim(def, { players = 1, forms = [], seed = 1, shared = { coins: 0, lives: 5, score: 0 }, defs = null } = {}) {
   const lv = parseLevel(def);
   const s = {
     frame: 0, lv, players: [], cams: [], entities: [], nextId: 1, rng: { seed },
@@ -21,10 +22,9 @@ export function createLevelSim(def, { players = 1, forms = [], seed = 1, shared 
     bumps: [], multicoin: {}, pswitch: 0, mode: 'play', modeTimer: 0, clear: null,
     shared: { ...shared }, events: [],
   };
-  s.cannons = [];
-  for (let ty = 0; ty < lv.h; ty++) for (let tx = 0; tx < lv.w; tx++) {
-    if (lv.tiles[ty * lv.w + tx] === T.CANNON && lv.tiles[(ty - 1) * lv.w + tx] !== T.CANNON) s.cannons.push({ tx, ty });
-  }
+  s.defs = defs || {};
+  s.areaStore = {};
+  s.cannons = buildCannons(lv);
   for (let i = 0; i < players; i++) {
     const p = createPlayer(i, lv.start.tx + i, lv.start.ty, forms[i] || 'small');
     moveBody(p, lv);   // settle onto the ground so a press on frame 1 can jump
@@ -52,6 +52,7 @@ export function stepLevel(s, inputs) {
   s.bumps = s.bumps.filter(b => --b.t > 0);
   for (const p of s.players) {
     if (p.dead) { stepDead(s, p); continue; }
+    if (p.pipe) { stepPipe(s, p); continue; }
     const buttons = s.mode === 'play' ? (inputs[p.idx] | 0) : BTN.RIGHT;
     const pressed = buttons & ~p.prev;
     const out = { events: s.events, bumps: [] };
@@ -64,6 +65,7 @@ export function stepLevel(s, inputs) {
   spawnInView(s);
   fireCannons(s);
   updateEntities(s);
+  ridePlatforms(s);
   despawnOutOfView(s);
   playerContacts(s);
   for (const ev of s.events) {
@@ -142,6 +144,7 @@ function afterMove(s, p, buttons) {
     }
   });
   if (p.y > lv.h * TS + 32 * SUB) killPlayer(s, p);
+  checkPipesAndDoors(s, p, buttons);
 }
 
 function stepDead(s, p) {
@@ -191,7 +194,7 @@ function despawnOutOfView(s) {
 
 function tickTimer(s) {
   if (s.mode !== 'play') return;
-  if (s.pswitch > 0 && --s.pswitch === 0) s.events.push({ e: 'pswitch-end' });
+  if (s.pswitch > 0 && --s.pswitch === 0) { swapPSwitch(s, false); s.events.push({ e: 'pswitch-end' }); }
   if (++s.timeSub < TIME_TICK) return;
   s.timeSub = 0;
   s.time--;
@@ -213,4 +216,80 @@ export function levelResult(s) {
     card: s.clear ? s.clear.card : -1,
     forms: s.players.map(p => (p.dead ? 'small' : p.form)),
   };
+}
+
+export function swapPSwitch(s, on) {
+  const lv = s.lv;
+  const [a, b, c, d] = on ? [T.BRICK, T.PSWITCH_COIN, T.COIN, T.PSWITCH_BRICK] : [T.PSWITCH_COIN, T.BRICK, T.PSWITCH_BRICK, T.COIN];
+  for (let ty = 0; ty < lv.h; ty++) for (let tx = 0; tx < lv.w; tx++) {
+    const id = lv.tiles[ty * lv.w + tx];
+    if (id === a) setTile(lv, tx, ty, b);
+    else if (id === c) setTile(lv, tx, ty, d);
+  }
+}
+
+
+const PIPE_FRAMES = 32;
+
+function stepPipe(s, p) {
+  const d = p.pipe.dir, step = 8;
+  if (d === 'down') p.y += step; else if (d === 'up') p.y -= step;
+  else if (d === 'right') p.x += step; else p.x -= step;
+  if (++p.pipe.t < PIPE_FRAMES) return;
+  if (p.pipe.phase === 'enter') { const to = p.pipe.to; p.pipe = null; enterArea(s, to); }
+  else { p.pipe = null; p.vy = 0; }
+}
+
+function checkPipesAndDoors(s, p, buttons) {
+  if (p.dead || p.pipe) return;
+  const cx = p.x + (p.w * SUB >> 1), foot = p.y + p.h * SUB;
+  for (const pp of s.lv.pipes) {
+    const [tx, ty] = pp.at;
+    let go = false;
+    if (pp.dir === 'down') go = (buttons & BTN.DOWN) && p.onGround && foot === ty * TS && cx >= tx * TS + 4 * SUB && cx <= (tx + 2) * TS - 4 * SUB;
+    else if (pp.dir === 'up') go = (buttons & BTN.UP) && p.y === (ty + 1) * TS && cx >= tx * TS + 4 * SUB && cx <= (tx + 2) * TS - 4 * SUB;
+    else if (pp.dir === 'right') go = (buttons & BTN.RIGHT) && p.onGround && foot === (ty + 2) * TS && p.x + p.w * SUB === tx * TS;
+    else if (pp.dir === 'left') go = (buttons & BTN.LEFT) && p.onGround && foot === (ty + 2) * TS && p.x === (tx + 1) * TS;
+    if (go) {
+      p.pipe = { phase: 'enter', dir: pp.dir, t: 0, to: pp.to };
+      p.vx = 0; p.vy = 0; p.carry = -1;
+      s.events.push({ e: 'sfx', id: 'pipe' });
+      return;
+    }
+  }
+  if (!(buttons & BTN.UP) || !p.onGround) return;
+  for (const d of s.lv.doors) {
+    const [tx, ty] = d.at;
+    if (cx >= tx * TS && cx < (tx + 1) * TS && foot === (ty + 1) * TS) {
+      if (d.to.level && d.to.level !== s.lv.id) enterArea(s, d.to);
+      else {
+        placeAt(p, d.to.at[0], d.to.at[1]);
+        s.cams[p.idx] = createCamera(p, s.lv);
+      }
+      s.events.push({ e: 'sfx', id: 'door' });
+      return;
+    }
+  }
+}
+
+function ridePlatforms(s) {
+  for (const p of s.players) {
+    if (p.dead || p.pipe) continue;
+    const prevRide = p.ride;
+    p.ride = -1;
+    for (const e of s.entities) {
+      if (!e.solidTop || e.dead) continue;
+      const overX = p.x + p.w * SUB > e.x && p.x < e.x + e.w * SUB;
+      if (!overX) continue;
+      const foot = p.y + p.h * SUB;
+      if (prevRide === e.id && p.vy >= 0) {
+        p.x += e.x - (e.prevX ?? e.x);
+        p.y = e.y - p.h * SUB;
+      } else if (p.vy >= 0 && foot >= (e.prevY ?? e.y) - 2 * SUB && foot - p.vy <= (e.prevY ?? e.y) + 2 * SUB) {
+        p.y = e.y - p.h * SUB;
+      } else continue;
+      p.vy = 0; p.onGround = true; p.ride = e.id;
+      break;
+    }
+  }
 }
