@@ -19,7 +19,14 @@ const loadWorld = async () => {
   try { return (await import('./content/levels/w1.js')).LEVELS; } catch { return {}; }
 };
 
-if (params.has('gallery')) {
+if (params.has('map')) {
+  const { MAP_W1 } = await import('./content/maps/w1.js');
+  const { createMap, stepMap } = await import('./game/worldmap.js');
+  const { drawMap } = await import('./draw/map.js');
+  const m = createMap(MAP_W1); let frame = 0;
+  window.__map = m;
+  startLoop({ step() { frame++; stepMap(m, MAP_W1, [input.read()]); }, draw() { drawMap(ctx, MAP_W1, m, [{}], frame); } });
+} else if (params.has('gallery')) {
   let page = 0, prev = 0;
   startLoop({
     step() { const m = input.read(); const { pressed } = edges(prev, m); prev = m; if (pressed & BTN.RIGHT) page++; if (pressed & BTN.LEFT) page = Math.max(0, page - 1); },
