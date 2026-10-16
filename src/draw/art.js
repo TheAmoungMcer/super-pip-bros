@@ -93,6 +93,8 @@ export function entityArt(e, frame) {
     case 'puff': return [L(e.t < 6 ? 'puff.1' : 'puff.2', 'puff', -4, -4)];
     case 'pswitch': return [L(e.state === 'pressed' ? 'pswitch.pressed' : 'pswitch', 'pswitch', 0, e.state === 'pressed' ? 8 : 0)];
     case 'lift_h': case 'lift_v': return [0, 16, 32].map(dx => L('wood', 'wood', dx, -8));
+    case 'bonebrute': return [L(e.state === 'spin' ? 'brute.spin' : f2('brute.run1', 'brute.run2'), 'brute', 0, 0, { flipX, flipY })];
+    case 'orb': return [L('orb', 'orb', -2, -2)];
     case 'popup': return [];          // drawn as text by drawLevel
     default: return [];
   }

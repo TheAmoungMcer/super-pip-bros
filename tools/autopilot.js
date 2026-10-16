@@ -37,7 +37,8 @@ function score(s, route) {
   if (portal) {
     const [tx, ty] = portal.at;
     const dx = Math.abs(p.x / SUB + p.w / 2 - (tx * 16 + 16)), dy = Math.abs(p.y / SUB - ty * 16);
-    return area * 1e7 + bossBonus + 1e5 - dx - 2 * dy;
+    // Height only matters once the entrance is close; far away, any route that gets nearer is good.
+    return area * 1e7 + bossBonus + 1e5 - dx - (dx < 12 * 16 ? 2 * dy : 0);
   }
   return area * 1e7 + bossBonus + p.x / SUB + (p.form !== 'small' ? 40 : 0);
 }

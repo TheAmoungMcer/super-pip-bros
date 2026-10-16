@@ -77,6 +77,13 @@ export function stepLevel(s, inputs) {
   resolveMode(s);
 }
 
+export function clearLevel(s, by, card) {
+  if (s.mode !== 'play') return;
+  s.mode = 'clear'; s.modeTimer = 0;
+  s.clear = { by, card };
+  s.events.push({ e: 'clear', card, boss: card < 0 });
+}
+
 export function hitBlock(s, { tx, ty, by, big }) {
   const lv = s.lv, id = tileAt(lv, tx, ty), info = INFO[id];
   const px = tx * TS, py = ty * TS;
@@ -137,11 +144,7 @@ function afterMove(s, p, buttons) {
     const info = INFO[id];
     if (info.coin) { setTile(lv, tx, ty, T.EMPTY); addCoins(s); }
     else if (info.deadly) killPlayer(s, p);
-    else if (id === T.GOAL && s.mode === 'play') {
-      s.mode = 'clear'; s.modeTimer = 0;
-      s.clear = { by: p.idx, card: Math.floor(s.frame / 8) % 3 };
-      s.events.push({ e: 'clear', card: s.clear.card });
-    }
+    else if (id === T.GOAL && s.mode === 'play') clearLevel(s, p.idx, Math.floor(s.frame / 8) % 3);
   });
   if (p.y > lv.h * TS + 32 * SUB) killPlayer(s, p);
   checkPipesAndDoors(s, p, buttons);

@@ -41,6 +41,15 @@ test('every entity type and state maps to existing art', () => {
   }
 });
 
+test('every entity type except score popups draws something in its main state', () => {
+  const mainState = { snapvine: 'up', firesnapvine: 'up', ember: 'wait' };
+  for (const type of Object.keys(TYPES)) {
+    if (type === 'popup') continue;
+    const e = { type, state: mainState[type] || '', x: 0, y: 0, w: 16, h: 16, dir: -1, t: 3, vx: 0, vy: 0 };
+    expect(entityArt(e, 0).length > 0 ? type : `${type} has no art`).toBe(type);
+  }
+});
+
 test('every tile id maps to existing art (or nothing)', () => {
   const ids = Object.values(T);
   const lv = lvl('.'.repeat(ids.length));

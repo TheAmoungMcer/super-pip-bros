@@ -5,3 +5,4 @@ import './items.js';
 import './projectiles.js';
 import './hazards.js';
 import './objects.js';
+import './bosses.js';
