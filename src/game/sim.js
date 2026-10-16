@@ -4,7 +4,7 @@ import { INFO, T } from './tiles.js';
 import { createPlayer, updatePlayer, isBig, setForm } from './player.js';
 import { createCamera, updateCamera } from './camera.js';
 import { moveBody } from './physics.js';
-import { killPlayer } from './powerups.js';
+import { killPlayer, formActions } from './powerups.js';
 import { TYPES, spawnEntity, updateEntities } from './entities/index.js';
 import { playerContacts } from './entities/common.js';
 import './entities/all.js';
@@ -48,9 +48,11 @@ export function stepLevel(s, inputs) {
   for (const p of s.players) {
     if (p.dead) { stepDead(s, p); continue; }
     const buttons = s.mode === 'play' ? (inputs[p.idx] | 0) : BTN.RIGHT;
+    const pressed = buttons & ~p.prev;
     const out = { events: s.events, bumps: [] };
     updatePlayer(p, buttons, s.lv, out);
     for (const b of out.bumps) hitBlock(s, b);
+    formActions(s, p, pressed);
     afterMove(s, p, buttons);
   }
   s.players.forEach((p, i) => updateCamera(s.cams[i], p, s.lv));

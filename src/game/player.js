@@ -7,7 +7,7 @@ export const PHYS = {
   ACCEL: 1, SKID: 3, AIR_TURN: 2, FRICTION: 1,
   GRAV: 5, GRAV_HOLD: 1, HOLD_UNTIL: -32, FALL_MAX: 64,
   JUMP_STAND: 56, JUMP_RUN: 60, JUMP_P: 64,
-  P_STEP: 8, P_DRAIN: 24, SLIDE_ACCEL: 2,
+  P_STEP: 8, P_DRAIN: 24, SLIDE_ACCEL: 2, FLY_FRAMES: 255,
 };
 
 const SMALL_H = 15, BIG_H = 26, WIDTH = 12;
@@ -95,20 +95,31 @@ export function updatePlayer(p, buttons, lv, out) {
     else if (!running && p.pTimer >= PHYS.P_DRAIN) { p.pTimer = 0; if (p.pmeter > 0) p.pmeter--; }
   }
 
-  // Jump
+  // Jump (with the Glide Leaf, a full P-meter jump starts flight)
   if ((pressed & BTN.A) && p.onGround) {
     const s = Math.abs(p.vx);
     p.vy = -(s >= PHYS.P_MAX ? PHYS.JUMP_P : s >= PHYS.RUN_MAX ? PHYS.JUMP_RUN : PHYS.JUMP_STAND);
     p.onGround = false;
     p.sliding = false;
+    if (p.form === 'leaf' && p.pmeter === 7) p.flyTimer = PHYS.FLY_FRAMES;
     out.events.push({ e: 'sfx', id: 'jump' });
+  } else if ((pressed & BTN.A) && !p.onGround && p.form === 'leaf') {
+    p.floatTimer = 16;            // flap: rises while flying, otherwise slows the fall
   }
 
   // Gravity
-  p.vy += p.vy < PHYS.HOLD_UNTIL && holdA ? PHYS.GRAV_HOLD : PHYS.GRAV;
-  if (p.vy > PHYS.FALL_MAX) p.vy = PHYS.FALL_MAX;
+  if (p.floatTimer > 0) p.floatTimer--;
+  if (p.flyTimer > 0 && --p.flyTimer === 0) p.pmeter = 0;
+  if (p.flyTimer > 0 && p.floatTimer > 0) {
+    p.vy = -24;
+  } else {
+    p.vy += p.vy < PHYS.HOLD_UNTIL && holdA ? PHYS.GRAV_HOLD : PHYS.GRAV;
+    const cap = p.floatTimer > 0 ? 16 : PHYS.FALL_MAX;
+    if (p.vy > cap) p.vy = cap;
+  }
 
   const r = moveBody(p, lv);
+  if (r.landed) p.flyTimer = 0;
   p.lastSlope = p.onGround ? r.slope : 0;
   if (r.ceiling) {
     out.bumps.push({ tx: r.ceiling.tx, ty: r.ceiling.ty, by: p.idx, big: isBig(p.form) });
