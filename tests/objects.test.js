@@ -142,3 +142,22 @@ test('pressing up at a door teleports to its target', () => {
   steps(s, 30, [BTN.UP]);
   expect(Math.floor(p.x / TS)).toBe(14);
 });
+
+test('a falling lift sets its rider down on the ground instead of dragging them through it', () => {
+  const s = simOf(String.raw`
+....................
+....................
+....................
+....................
+..........m.........
+....................
+####################`, {}, [10, 0]);
+  const lift = find(s, 'lift_h'), p = s.players[0];
+  p.x = lift.x + 8 * SUB; p.y = lift.y - p.h * SUB - 4 * SUB; p.vy = 8;
+  steps(s, 10);
+  expect(p.ride).toBe(lift.id);
+  steps(s, 120);
+  expect(p.dead).toBe(false);
+  expect(p.onGround).toBe(true);
+  expect(p.y + p.h * SUB).toBe(6 * TS);
+});

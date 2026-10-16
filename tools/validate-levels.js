@@ -11,7 +11,8 @@ export function validateLevels(defs) {
     if (!(def.time > 0)) errs.push(`${where}: time must be > 0`);
     if (lv.h > 27) errs.push(`${where}: taller than 27 rows`);
     const hasGoal = lv.tiles.includes(T.GOAL);
-    if (!def.sub && !def.boss && !hasGoal) errs.push(`${where}: no goal (G) and not a boss level`);
+    const routeHasGoal = (def.route || []).some(r => defs[r] && parseLevel(defs[r]).tiles.includes(T.GOAL));
+    if (!def.sub && !def.boss && !hasGoal && !routeHasGoal) errs.push(`${where}: no goal (G) and not a boss level`);
     const { tx, ty } = lv.start;
     const under = tileAt(lv, tx, ty + 1);
     if (!(INFO[under].solid || INFO[under].semi) || INFO[tileAt(lv, tx, ty)].solid) errs.push(`${where}: start ${tx},${ty} must be an empty tile on top of solid ground`);

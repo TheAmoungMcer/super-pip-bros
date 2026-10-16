@@ -272,6 +272,17 @@ function checkPipesAndDoors(s, p, buttons) {
   }
 }
 
+// Move a rider onto a platform's top through the tile collider; false if tiles got in the way.
+function carryTo(p, e, lv, riding) {
+  const target = e.y - p.h * SUB, vx = p.vx;
+  p.vx = riding ? e.x - (e.prevX ?? e.x) : 0;
+  p.vy = target - p.y;
+  p.onGround = false;
+  moveBody(p, lv);
+  p.vx = vx;
+  return p.y === target;
+}
+
 function ridePlatforms(s) {
   for (const p of s.players) {
     if (p.dead || p.pipe) continue;
@@ -282,12 +293,9 @@ function ridePlatforms(s) {
       const overX = p.x + p.w * SUB > e.x && p.x < e.x + e.w * SUB;
       if (!overX) continue;
       const foot = p.y + p.h * SUB;
-      if (prevRide === e.id && p.vy >= 0) {
-        p.x += e.x - (e.prevX ?? e.x);
-        p.y = e.y - p.h * SUB;
-      } else if (p.vy >= 0 && foot >= (e.prevY ?? e.y) - 2 * SUB && foot - p.vy <= (e.prevY ?? e.y) + 2 * SUB) {
-        p.y = e.y - p.h * SUB;
-      } else continue;
+      const riding = prevRide === e.id && p.vy >= 0;
+      const landing = !riding && p.vy >= 0 && foot >= (e.prevY ?? e.y) - 2 * SUB && foot - p.vy <= (e.prevY ?? e.y) + 2 * SUB;
+      if (!(riding || landing) || !carryTo(p, e, s.lv, riding)) continue;
       p.vy = 0; p.onGround = true; p.ride = e.id;
       break;
     }

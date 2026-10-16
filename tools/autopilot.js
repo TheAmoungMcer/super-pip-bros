@@ -1,5 +1,7 @@
 import { createLevelSim, stepLevel, cloneSim } from '../src/game/sim.js';
-import { BTN, SUB } from '../src/game/consts.js';
+import { BTN, SUB, TS } from '../src/game/consts.js';
+import { tileAt } from '../src/game/level.js';
+import { INFO } from '../src/game/tiles.js';
 
 const { LEFT: L, RIGHT: R, A, B, DOWN: D, UP: U } = BTN;
 const K = 8;
@@ -8,7 +10,20 @@ export const MACROS = [
   (i) => A, (i) => 0, (i) => L | B, (i) => L | A, (i) => D, (i) => U,
   (i) => R | B | ((i & 3) === 0 ? A : 0),      // leaf flight flapping
   (i) => (i < 2 ? B : 0),                       // tail / fireball
+  (i) => U | (i === 0 ? 0 : A),                 // jump into a ceiling pipe (fresh press each time)
 ];
+
+// A falling player with no floor and no platform anywhere beneath them is already dead.
+function doomed(s) {
+  const p = s.players[0];
+  if (p.onGround || p.vy <= 0 || p.flyTimer > 0 || p.form === 'leaf') return false;
+  const x0 = Math.floor(p.x / TS) - 1, x1 = Math.floor((p.x + p.w * SUB) / TS) + 1;
+  for (let tx = x0; tx <= x1; tx++) for (let ty = Math.floor(p.y / TS); ty < s.lv.h; ty++) {
+    const info = INFO[tileAt(s.lv, tx, ty)];
+    if ((info.solid || info.semi || info.slope) && !info.deadly) return false;
+  }
+  return !s.entities.some(e => e.solidTop && e.y > p.y && Math.abs(e.x - p.x) < 64 * SUB);
+}
 
 function score(s, route) {
   const p = s.players[0];
@@ -16,6 +31,14 @@ function score(s, route) {
   const area = Math.max(0, route.indexOf(s.lv.id));
   const boss = s.entities.find(e => e.boss);
   const bossBonus = boss ? (boss.maxHp - boss.hp) * 1e4 : 0;
+  // If the route continues through a pipe or door, steer for its mouth instead of simply going right.
+  const next = route[area + 1];
+  const portal = next && [...s.lv.pipes, ...(s.lv.doors || [])].find(q => q.to.level === next);
+  if (portal) {
+    const [tx, ty] = portal.at;
+    const dx = Math.abs(p.x / SUB + p.w / 2 - (tx * 16 + 16)), dy = Math.abs(p.y / SUB - ty * 16);
+    return area * 1e7 + bossBonus + 1e5 - dx - 2 * dy;
+  }
   return area * 1e7 + bossBonus + p.x / SUB + (p.form !== 'small' ? 40 : 0);
 }
 
@@ -29,7 +52,7 @@ export function solve(defs, id, { width = 48, maxSteps = 900 } = {}) {
       for (let m = 0; m < MACROS.length; m++) {
         const s = cloneSim(node.s);
         for (let i = 0; i < K; i++) stepLevel(s, [MACROS[m](i)]);
-        if (s.players[0].dead || s.mode === 'fail') continue;
+        if (s.players[0].dead || s.mode === 'fail' || doomed(s)) continue;
         const moves = node.moves.concat(m);
         if (s.mode === 'clear' || s.mode === 'done') return { moves, frames: moves.length * K };
         next.push({ s, moves, score: score(s, route) });
@@ -46,6 +69,7 @@ export function solve(defs, id, { width = 48, maxSteps = 900 } = {}) {
       beam.push(n);
       if (beam.length >= width) break;
     }
+    if (process.env.AP_DEBUG && depth % 25 === 0 && beam.length) { const b = beam[0].s, p = b.players[0]; console.log(depth, b.lv.id, (p.x / 256).toFixed(1), (p.y / 256).toFixed(1), p.form, beam.length); }
     if (!beam.length) return null;
   }
   return null;
