@@ -65,3 +65,16 @@ test('bone brute: stomping it while it spins hurts the player', () => {
   expect(p.form).toBe('small');
   expect(e.hp).toBe(2);
 });
+test('grimling fires wand rings at the player and falls to three stomps', () => {
+  const s = simOf(arena('q'), {}, [2, 8]);
+  const e = find(s, 'grimling');
+  let ring = null;
+  for (let i = 0; i < 300 && !ring; i++) { steps(s, 1); s.players[0].hurtTimer = 200; ring = find(s, 'wandring'); }
+  expect(ring).toBeDefined();
+  expect(ring.vx).toBeLessThan(0);
+  for (let k = 0; k < 3; k++) { stompBoss(s, e); s.players[0].hurtTimer = 200; }
+  expect(e.hp).toBe(0);
+  s.players[0].x = 2 * 16 * SUB;          // step away so the wand isn't collected straight away
+  steps(s, 60);
+  expect(find(s, 'orb').wand).toBe(true);
+});

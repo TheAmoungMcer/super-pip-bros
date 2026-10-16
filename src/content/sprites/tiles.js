@@ -78,11 +78,12 @@ export const sprites = {
     if (x === 1 || y === 1) return '3';
     return '2';
   }),
+  // Wooden planks: horizontal boards with staggered seams and nail heads.
   wood: gen(16, 16, (x, y) => {
-    if (x === 0 || x === 15 || y === 0 || y === 15) return '1';
-    const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5));
-    if (d > 5.5 && d < 6.5) return '3';
-    if (d > 2.5 && d < 3.5) return '1';
+    if (y % 8 === 7) return '1';
+    if (x === (y < 8 ? 3 : 11)) return '1';
+    if (y % 8 === 0) return '3';
+    if ((y % 8 === 3) && (x === (y < 8 ? 6 : 14) || x === (y < 8 ? 0 : 8))) return '1';
     return '2';
   }),
   'semi.top': gen(16, 16, (x, y) => {
