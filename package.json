@@ -1,0 +1,10 @@
+{
+  "name": "super-pip-bros",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun tools/serve.js",
+    "test": "bun test",
+    "selftest": "bun tools/selftest.js"
+  }
+}
