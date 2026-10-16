@@ -8,7 +8,7 @@ export function createGuest(conn, worlds) {
     pending: [], f: 0, hostB: 0, inbound: [], silent: 0,
     step(localB) {
       if (g.status !== 'playing' && g.status !== 'connecting') return [];
-      if (++g.silent > SILENCE_FRAMES) { g.status = 'closed'; conn.close(); return []; }
+      if (++g.silent > SILENCE_FRAMES) { g.status = 'closed'; g.reason = 'timeout'; conn.close(); return []; }
       conn.send({ t: 'in', f: g.f, b: localB });
       g.pending.push({ f: g.f, b: localB });
       g.f++;

@@ -4,7 +4,7 @@ import { startLoop } from './engine/loop.js';
 import { createAudio } from './engine/audio.js';
 import { BTN } from './game/consts.js';
 import { createLevelSim, stepLevel } from './game/sim.js';
-import { createSession, stepSession, makeSave } from './game/session.js';
+import { createSession, stepSession, makeSave, autoPause } from './game/session.js';
 import { safeStorage, listSaves, readSave, writeSave, eraseSave } from './game/save.js';
 import { drawLevel } from './draw/level.js';
 import { drawHud } from './draw/hud.js';
@@ -30,6 +30,12 @@ const audio = createAudio();
 const storage = safeStorage();
 for (const ev of ['keydown', 'pointerdown']) window.addEventListener(ev, () => audio.unlock());
 const params = new URLSearchParams(location.search);
+// Shown under the canvas if a frame throws; the loop keeps running.
+const showError = (e) => {
+  console.error(e);
+  const el = document.getElementById('msg');
+  if (el) el.textContent = `Something went wrong: ${e && e.message ? e.message : e}. Reload the page if the game stops.`;
+};
 
 const playEvents = (events) => {
   for (const ev of events) {
@@ -84,6 +90,9 @@ function game() {
   window.__game = { get mode() { return mode; }, get sess() { return sess; }, get title() { return title; }, get host() { return host; }, get guest() { return guest; }, get banner() { return banner; } };
   const NAV = BTN.UP | BTN.DOWN | BTN.LEFT | BTN.RIGHT | BTN.START;
   window.addEventListener('pagehide', () => { if (guest) guest.leave(); });
+  const focusLost = () => { if (mode === 'game' && sess) autoPause(sess); };
+  window.addEventListener('blur', focusLost);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) focusLost(); });
   window.addEventListener('keydown', (e) => {
     if (mode !== 'title' || title.mode !== 'code') return;
     if (e.key === 'Escape') title.mode = 'menu';
@@ -103,7 +112,8 @@ function game() {
     if (sess.dirty && sess.scene !== 'level') { writeSave(storage, slot, makeSave(sess)); sess.dirty = false; }
   };
   startLoop({
-    keepAliveHidden: () => mode === 'host',
+    keepAliveHidden: () => mode === 'host' || mode === 'join',
+    onError: showError,
     step() {
       const coding = mode === 'title' && title.mode === 'code';
       const m = coding ? (input.readPads() | (input.readKeys() & NAV)) : input.read();
@@ -117,7 +127,7 @@ function game() {
           room = hostRoom({
             onCode: (c) => { roomCode = c; banner = `ROOM ${c} - SHARE THIS CODE`; },
             onGuest: (t) => { host.attach(t); hadGuest = true; banner = 'PEP JOINED!'; bannerT = 180; },
-            onError: (msg) => { banner = `${msg} - PLAYING SOLO`; },
+            onError: (msg) => { if (!host || !host.connected) banner = `${msg} - PLAYING SOLO`; },
           });
         } else if (act?.action === 'start') begin(1, act.slot);
         else if (act?.action === 'erase') { eraseSave(storage, act.slot); title.saves = listSaves(storage); }
@@ -141,7 +151,7 @@ function game() {
         if (sess.quit) backToTitle();
       } else if (mode === 'join' && guest) {
         playEvents(guest.step(m));
-        if (guest.status === 'closed') backToTitle('HOST LEFT THE GAME');
+        if (guest.status === 'closed') backToTitle(guest.reason === 'timeout' ? 'LOST CONNECTION TO HOST' : 'HOST LEFT THE GAME');
         else if (guest.status === 'rejected') backToTitle('VERSION MISMATCH - RELOAD THE PAGE');
       }
       const view = mode === 'join' ? guest && guest.view() : sess;

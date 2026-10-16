@@ -28,7 +28,7 @@ export function createSession({ players = 1, seed = 1, save = null } = {}) {
     level: null, node: null, hut: null, slots: null, gameover: null,
     paused: false, quit: false, dirty: false, events: [], prev: [0, 0],
   };
-  if (save) applySave(sess, save);
+  if (save && isUsableSave(save)) applySave(sess, save);
   return sess;
 }
 
@@ -37,8 +37,14 @@ export function makeSave(sess) {
   return {
     v: SAVE_VERSION, world: sess.world,
     map: { x: m.x, y: m.y, cleared: { ...m.cleared }, opened: { ...m.opened }, used: { ...m.used } },
-    shared: { ...sess.shared }, forms: [...sess.forms], items: structuredClone(sess.items), cards: structuredClone(sess.cards),
+    shared: { ...sess.shared, lives: sess.shared.lives < 0 ? START_LIVES : sess.shared.lives }, forms: [...sess.forms], items: structuredClone(sess.items), cards: structuredClone(sess.cards),
   };
+}
+
+// A save that passed save.js's shape check can still point somewhere this build can't load.
+export function isUsableSave(d) {
+  const m = d && d.map;
+  return !!(WORLDS[d.world] && m && Number.isInteger(m.x) && Number.isInteger(m.y) && d.shared && Array.isArray(d.forms));
 }
 
 export function applySave(sess, d) {
@@ -46,9 +52,11 @@ export function applySave(sess, d) {
   sess.map = createMap(WORLDS[d.world].map);
   Object.assign(sess.map, { x: d.map.x, y: d.map.y, px: d.map.x * 16, py: d.map.y * 16, cleared: { ...d.map.cleared }, opened: { ...d.map.opened }, used: { ...d.map.used } });
   sess.shared = { ...d.shared };
-  sess.forms = pad(d.forms, sess.players, () => 'small');
-  sess.items = pad(d.items, sess.players, () => []);
-  sess.cards = pad(d.cards, sess.players, () => []);
+  // Keep every saved player's data, even when this session starts with fewer players.
+  const n = (arr) => Math.max(sess.players, (arr || []).length);
+  sess.forms = pad(d.forms, n(d.forms), () => 'small');
+  sess.items = pad(d.items, n(d.items), () => []);
+  sess.cards = pad(d.cards, n(d.cards), () => []);
 }
 
 const toScene = (sess, scene) => { sess.scene = scene; sess.t = 0; };
@@ -179,6 +187,7 @@ function failLevel(sess) {
 export function addPlayer(sess) {
   if (sess.players >= 2) return;
   sess.players = 2;
+  sess.paused = false;      // solo pause can't be undone in co-op, so a join always resumes
   if (sess.forms.length < 2) sess.forms.push('small');
   if (sess.stars.length < 2) sess.stars.push(false);
   if (sess.items.length < 2) sess.items.push([]);
@@ -198,4 +207,8 @@ export function dropPlayer(sess) {
   sess.players = 1;
   sess.menus[1] = null;
   if (sess.level) { sess.level.players.length = 1; sess.level.cams.length = 1; }
+}
+// Window lost focus: pause a solo level (co-op keeps running for the other player).
+export function autoPause(sess) {
+  if (sess.players === 1 && sess.scene === 'level' && sess.level.mode === 'play') sess.paused = true;
 }
