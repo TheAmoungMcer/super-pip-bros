@@ -293,3 +293,12 @@ function ridePlatforms(s) {
     }
   }
 }
+
+// Clone for search/prediction. Level defs are static, so they are shared, not copied.
+export function cloneSim(s) {
+  const defs = s.defs;
+  s.defs = null;
+  const c = structuredClone(s);
+  s.defs = defs; c.defs = defs;
+  return c;
+}

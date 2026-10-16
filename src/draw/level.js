@@ -5,6 +5,8 @@ import { SUB, SCREEN_W, PLAY_H } from '../game/consts.js';
 import { T } from '../game/tiles.js';
 import { tileAt } from '../game/level.js';
 
+const BEHIND = new Set(['snapvine', 'firesnapvine']);
+
 const drawLayers = (ctx, layers, x, y) => {
   for (const l of layers) blit(ctx, l.name, l.pal, x + l.dx, y + l.dy, { flipX: l.flipX, flipY: l.flipY });
 };
@@ -29,7 +31,8 @@ export function drawLevel(ctx, s, camIdx) {
   fillNES(ctx, THEMES[lv.theme]?.bg ?? 0x31, 0, 0, SCREEN_W, PLAY_H);
   drawScenery(ctx, lv, cam);
 
-  // Players inside pipes are drawn behind tiles.
+  // Pipe plants and players inside pipes are drawn behind tiles, so the pipe hides them.
+  for (const e of s.entities) if (BEHIND.has(e.type)) drawLayers(ctx, entityArt(e, frame), e.x / SUB - cam.x, e.y / SUB - cam.y);
   for (const p of s.players) if (p.pipe) drawLayers(ctx, playerArt(p, frame), p.x / SUB - cam.x, p.y / SUB - cam.y);
 
   const tx0 = Math.floor(cam.x / 16), ty0 = Math.floor(cam.y / 16);
@@ -49,6 +52,7 @@ export function drawLevel(ctx, s, camIdx) {
   }
 
   for (const e of s.entities) {
+    if (BEHIND.has(e.type)) continue;
     const x = e.x / SUB - cam.x, y = e.y / SUB - cam.y;
     if (x < -48 || x > SCREEN_W + 48) continue;
     if (e.type === 'popup') { drawText(ctx, popupText(e), x, y, 'text'); continue; }
