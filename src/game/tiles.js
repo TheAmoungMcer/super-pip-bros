@@ -64,3 +64,6 @@ export function slopeDownDir(id) {
   if (id === T.SLOPE45_DN || id === T.GENTLE_DN_HI || id === T.GENTLE_DN_LO) return 1;
   return 0;
 }
+
+// Tile placed underneath an entity char (default EMPTY).
+export const ENTITY_TILE = { o: T.USED };

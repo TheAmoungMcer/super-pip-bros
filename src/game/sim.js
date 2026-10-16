@@ -8,6 +8,7 @@ import { killPlayer, formActions } from './powerups.js';
 import { TYPES, spawnEntity, updateEntities } from './entities/index.js';
 import { playerContacts } from './entities/common.js';
 import './entities/all.js';
+import { fireCannons } from './entities/hazards.js';
 
 export const DEATH_FRAMES = 150, RESPAWN_FRAMES = 180, CLEAR_FRAMES = 240, TIME_TICK = 40;
 const SPAWN_MARGIN = 24, DESPAWN_MARGIN = 80;  // pixels beyond the screen edge
@@ -20,6 +21,10 @@ export function createLevelSim(def, { players = 1, forms = [], seed = 1, shared 
     bumps: [], multicoin: {}, pswitch: 0, mode: 'play', modeTimer: 0, clear: null,
     shared: { ...shared }, events: [],
   };
+  s.cannons = [];
+  for (let ty = 0; ty < lv.h; ty++) for (let tx = 0; tx < lv.w; tx++) {
+    if (lv.tiles[ty * lv.w + tx] === T.CANNON && lv.tiles[(ty - 1) * lv.w + tx] !== T.CANNON) s.cannons.push({ tx, ty });
+  }
   for (let i = 0; i < players; i++) {
     const p = createPlayer(i, lv.start.tx + i, lv.start.ty, forms[i] || 'small');
     moveBody(p, lv);   // settle onto the ground so a press on frame 1 can jump
@@ -57,6 +62,7 @@ export function stepLevel(s, inputs) {
   }
   s.players.forEach((p, i) => updateCamera(s.cams[i], p, s.lv));
   spawnInView(s);
+  fireCannons(s);
   updateEntities(s);
   despawnOutOfView(s);
   playerContacts(s);

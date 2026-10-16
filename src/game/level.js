@@ -1,4 +1,4 @@
-import { T, LEGEND, ENTITY_CHARS } from './tiles.js';
+import { T, LEGEND, ENTITY_CHARS, ENTITY_TILE } from './tiles.js';
 
 export function parseLevel(def) {
   const rows = def.map.split('\n');
@@ -11,7 +11,10 @@ export function parseLevel(def) {
     for (let tx = 0; tx < w; tx++) {
       const c = row[tx] ?? '.';
       if (c in LEGEND) tiles[ty * w + tx] = LEGEND[c];
-      else if (c in ENTITY_CHARS) spawns.push({ i: spawns.length, type: ENTITY_CHARS[c], tx, ty });
+      else if (c in ENTITY_CHARS) {
+        spawns.push({ i: spawns.length, type: ENTITY_CHARS[c], tx, ty });
+        tiles[ty * w + tx] = ENTITY_TILE[c] ?? T.EMPTY;
+      }
       else throw new Error(`level ${def.id}: unknown char '${c}' at ${tx},${ty}`);
     }
   });
