@@ -8,6 +8,9 @@ import { STAR_FRAMES } from './powerups.js';
 import { SAVE_VERSION } from './save.js';
 import { LEVELS as W1 } from '../content/levels/w1.js';
 import { MAP_W1 } from '../content/maps/w1.js';
+import { createPlayer } from './player.js';
+import { createCamera } from './camera.js';
+import { SUB } from './consts.js';
 
 export const WORLDS = { 1: { levels: W1, map: MAP_W1 } };
 export const START_LIVES = 4;
@@ -148,7 +151,7 @@ function stepLevelScene(sess, w, inputs, pressed) {
 function finishLevel(sess, w) {
   const lv = sess.level, r = levelResult(lv);
   sess.shared = { ...lv.shared, score: lv.shared.score + lv.time * 50 };
-  sess.forms = r.forms.slice();
+  r.forms.forEach((f, i) => { sess.forms[i] = f; });
   if (r.card >= 0) {
     const by = lv.clear.by;
     const c = addCard(sess.cards[by], r.card);
@@ -171,4 +174,28 @@ function failLevel(sess) {
   sess.dirty = true;
   if (sess.shared.lives < 0) { sess.gameover = { sel: 0 }; toScene(sess, 'gameover'); }
   else toScene(sess, 'map');
+}
+
+export function addPlayer(sess) {
+  if (sess.players >= 2) return;
+  sess.players = 2;
+  if (sess.forms.length < 2) sess.forms.push('small');
+  if (sess.stars.length < 2) sess.stars.push(false);
+  if (sess.items.length < 2) sess.items.push([]);
+  if (sess.cards.length < 2) sess.cards.push([]);
+  if (sess.menus.length < 2) sess.menus.push(null);
+  if (sess.level) {
+    const host = sess.level.players[0];
+    const p = createPlayer(1, 0, 0, 'small');
+    p.x = host.x; p.y = host.y + host.h * SUB - p.h * SUB; p.onGround = host.onGround; p.hurtTimer = 120;
+    sess.level.players.push(p);
+    sess.level.cams.push(createCamera(p, sess.level.lv));
+  }
+}
+
+export function dropPlayer(sess) {
+  if (sess.players < 2) return;
+  sess.players = 1;
+  sess.menus[1] = null;
+  if (sess.level) { sess.level.players.length = 1; sess.level.cams.length = 1; }
 }

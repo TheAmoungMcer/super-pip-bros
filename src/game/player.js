@@ -102,7 +102,7 @@ export function updatePlayer(p, buttons, lv, out) {
     p.onGround = false;
     p.sliding = false;
     if (p.form === 'leaf' && p.pmeter === 7) p.flyTimer = PHYS.FLY_FRAMES;
-    out.events.push({ e: 'sfx', id: 'jump' });
+    out.events.push({ e: 'sfx', id: 'jump', who: p.idx });
   } else if ((pressed & BTN.A) && !p.onGround && p.form === 'leaf') {
     p.floatTimer = 16;            // flap: rises while flying, otherwise slows the fall
   }
